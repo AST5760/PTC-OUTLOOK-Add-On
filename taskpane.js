@@ -315,7 +315,7 @@ async function getCurrentState() {
         safeGet(cb => item.body.getAsync(Office.CoercionType.Text, cb))
     ]);
 
-    const getEmails = (arr) => (arr || []).map(p => p.emailAddress.toLowerCase()).sort().join(";");
+    const getEmails = (arr) => (arr || []).filter(p => p && p.emailAddress).map(p => p.emailAddress.toLowerCase()).sort().join(";");
     const getAtts = (arr) => (arr || []).map(a => a.name + a.size).sort().join(";");
 
     // Simple fingerprint for body to detect changes without storing huge strings
@@ -329,13 +329,25 @@ async function getCurrentState() {
     };
 }
 
+function hashCode(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = (hash << 5) - hash + str.charCodeAt(i);
+        hash |= 0;
+    }
+    return hash.toString(36);
+}
+
 async function markAsVerified() {
     const state = await getCurrentState();
+
+    const rawStateString = `${state.recipients}_${state.attachments}_${state.subject}_${state.bodyFingerprint}`;
+    const hashedState = hashCode(rawStateString);
 
     Office.context.mailbox.item.loadCustomPropertiesAsync((result) => {
         const props = result.value;
         props.set("isVerified", true);
-        props.set("verifiedState", JSON.stringify(state));
+        props.set("verifiedState", hashedState);
 
         props.saveAsync((saveResult) => {
             if (saveResult.status === Office.AsyncResultStatus.Succeeded) {
